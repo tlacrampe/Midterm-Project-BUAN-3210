@@ -1,0 +1,301 @@
+---
+title: "Exploring product and sales data for cereal brands and products"
+author: "Christopher Lacrampe"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    theme: yeti
+    highlight: tango
+    toc: true
+    toc_float: true
+    code_folding: hide
+    
+---
+
+#### Code Header and Libraries in codes below
+
+```{r}
+# Course: BUAN 3210
+# Title: Technical Appendix for Midterm Project
+# Purpose: Provide EDA to compose a memo
+# Date: February 1, 2018
+# Author: Christopher Lacrampe
+```
+
+```{r, Warning = FALSE, message = FALSE}
+#####----- INSTALL THE PACKAGES BELOW BEORE TRYING TO RUN THIS FILE -----#####
+
+rm(list=ls(all=TRUE)) # clears working environment
+
+# The tidyverse package contains ggplot2, tibble, tidyr, readr, purr, and dplyr and several others
+library(tidyverse)
+
+# The gridExtra package contains grid.arrange function used to combine plots
+library(gridExtra)
+
+# The knitr package contains kable fucntions for formating table
+library(knitr)
+
+# ALlows us to construct confidence interval
+library(MultinomialCI)
+
+# Allows us to output regression 
+library(stargazer)
+```
+
+#### Load data and begin new EDA  
+
+Work with `mtp_sales_data` and `mtp_product_data` data sets
+
+```{r, warning = FALSE, message - FALSE}
+# Load data 
+salesDat <- read.csv("mtp_sales_data.csv")
+productDat <- read.csv("mtp_product_data.csv")
+
+# Structure of data so know what working with
+str(salesDat)
+str(productDat)
+
+# Re-structure upc key in productDat to enable joining
+productDat$UPC <- gsub("-", ".", productDat$UPC)
+
+# Seperating brand by company
+productDat$company <- fct_collapse(productDat$brand,
+             General_Mills = c("GENERAL MILLS CHEERIOS", "GENERAL MILLS CINNAMON TST CR", "GENERAL MILLS COCOA PUFFS", "GENERAL MILLS KIX", "GENERAL MILLS LUCKY CHARMS"),
+             Kellogs = c("KELLOGGS COCOA KRISPIES", "KELLOGGS FROOT LOOPS", "KELLOGGS FROSTED FLAKES", "KELLOGGS FROSTED MINI WHEATS", "KELLOGGS RAISIN BRAN", "KELLOGGS RICE KRISPIES", "KELLOGGS SMART START", "KELLOGGS SPECIAL K"),
+             Post = c("POST GRAPE NUTS", "POST SHREDDED WHEAT")
+                               )
+
+# Create revenue and price per volume variables for greater understanding
+salesDat$revenue <- salesDat$price * salesDat$units
+salesDat$price_per_volume <- salesDat$price /productDat$volume
+
+# Mutating "promo" variable into factor levels of no and yes for inStorePromotions
+salesDat$promo <- factor(salesDat$promo)
+```
+
+Having restructured the UPC keys so they match in both the mtp_sales_data and mtp_product_data, we can now join both for a broader range of variable comparisons.
+
+### 1. Exploring non-graphical relationships with emphasis on categorical variables
+```{r}
+kable(
+  salesDat %>% 
+    left_join(productDat, by = "UPC") %>% 
+    select(brand, flavor, volume, units, price, promo, ad, revenue, price_per_volume) %>% 
+    group_by(brand) %>% 
+    summarise(count = n(),
+    percent = (sum(count) / nrow(salesDat)) * 100,
+    mean_revenue = mean(revenue),
+    mean_price_vol = mean(price_per_volume),
+    mean_units = mean(units))
+)
+```
+
+```{r}
+kable(
+  salesDat %>% 
+    left_join(productDat, by = "UPC") %>% 
+    select(company, brand, flavor, volume, units, price, promo, ad, revenue, price_per_volume) %>% 
+    group_by(company) %>% 
+    summarise(count = n(),
+    percent = (sum(count) / nrow(salesDat)) * 100,
+    mean_revenue = mean(revenue),
+    mean_price_vol = mean(price_per_volume),
+    mean_units = mean(units))
+)
+```
+
+
+```{r}
+kable(
+  salesDat %>% 
+    left_join(productDat, by = "UPC") %>% 
+    select(brand, flavor, volume, units, price, promo, ad, revenue, price_per_volume) %>% 
+    group_by(flavor) %>% 
+    summarise(count = n(),
+    percent = (sum(count) / nrow(salesDat)) * 100,
+    mean_revenue = mean(revenue),
+    mean_price_vol = mean(price_per_volume),
+    mean_units = mean(units))
+)
+```
+
+```{r}
+kable(
+  salesDat %>% 
+    left_join(productDat, by = "UPC") %>% 
+    select(brand, flavor, volume, units, price, promo, ad, revenue, price_per_volume) %>% 
+    group_by(ad, promo) %>% 
+    summarise(count = n(),
+    percent = (sum(count) / nrow(salesDat)) * 100,
+    mean_revenue = mean(revenue),
+    mean_price_vol = mean(price_per_volume),
+    mean_units = mean(units))
+)
+```
+
+### 2. Exploring numerical relationships (e.g. units by price)
+```{r}
+cor(salesDat$price_per_volume, salesDat$units)
+cor(salesDat$revenue, salesDat$units)
+grid.arrange(
+ggplot(salesDat, aes(x = units, y = price_per_volume, color = promo)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "black"),
+ggplot(salesDat, aes(x = units, y = revenue, color = promo)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "black"),
+ncol = 2
+)
+```
+
+From these two graphics we can see a dstinct positive trend between units and revenue, along with noting that promotions tend to lead to lower revenue sales (likely because the goods are discounted during promotions). However, in regards to price and volume, there appears to be a very minimal negative relationship, likely due to the fact that as the price per volume falls, buyers tend to purchase more.
+
+
+```{r}
+cor(salesDat$price_per_volume, salesDat$revenue)
+ggplot(salesDat, aes(x = price_per_volume, y = revenue, color = promo)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "black")
+```
+
+Although some interesting radial patterns appear from the origin, the regression line indicates that there is not a strong relationship between price per volume and revenue.
+
+```{r}
+cor(salesDat$price, salesDat$units)
+cor(salesDat$price, salesDat$revenue)
+grid.arrange(
+  
+ggplot(salesDat, aes(x = units, y = price_per_volume, color = promo)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "black"),
+  
+  ggplot(salesDat, aes(x = price, y = revenue, color = promo)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "black"),
+  
+  ncol = 2
+)
+```
+
+By removing the effects of normalizing price by unit volume, we can see that the effects of the variable's relationships with units and revenue grows stronger
+
+### 3. Exploring ad categories by various densities
+
+```{r}
+# First calculate the mean
+week_mean <- salesDat %>% 
+  group_by(ad) %>% 
+  summarise(week_mean = mean(week))
+
+# Use geom_density to illustrate PDF
+salesDat %>% 
+  ggplot(aes(x = week, fill = ad, color = ad)) + 
+  guides(color = FALSE) +
+  labs(title = "Ad density by week\n", x = "length of ad campaign(weeks)", fill = "Ad Campaign Type") +
+  scale_fill_manual(labels = c("Big Ad", "Small/Medium Ad", "None"), values = c("red", "green", "blue"))+
+  geom_density(alpha = 0.25) +
+  geom_vline(data = week_mean, aes(xintercept = week_mean, color = ad)) + # Bring in calculated mean
+  xlim(-10, 75) # Had to set bounds to visualize
+```
+```{r}
+# First calculate the mean
+mean_price_per_volume <- salesDat %>% 
+  group_by(ad) %>% 
+  summarise(mean_price_per_volume = mean(price_per_volume)) 
+
+# Use geom_density to illustrate PDF
+salesDat %>% 
+  ggplot(aes(x = price_per_volume, fill = ad, color = ad)) + 
+  guides(color = FALSE) +
+  labs(title = "Ad density by price per volume\n", x = "Unit Price per Volume", fill = "Ad Campaign Type") +
+  scale_fill_manual(labels = c("Big Ad", "Small/Medium Ad", "None"), values = c("red", "green", "blue"))+
+  geom_density(alpha = 0.25) +
+  geom_vline(data = mean_price_per_volume, aes(xintercept = mean_price_per_volume, color = ad)) + # Bring in calculated mean
+  xlim(-2, 20) # Had to set bounds to visualize
+```
+
+```{r}
+# First calculate the mean
+mean_revenue <- salesDat %>% 
+  group_by(ad) %>% 
+  summarise(mean_revenue = mean(revenue)) 
+
+# Use geom_density to illustrate PDF
+salesDat %>% 
+  ggplot(aes(x = revenue, fill = ad, color = ad)) + 
+  guides(color = FALSE) +
+  labs(title = "Ad density by revenue", x = "Revenue", fill = "Ad Campaign Type") +
+  scale_fill_manual(labels = c("Big Ad", "Small/Medium Ad", "None"), values = c("red", "green", "blue"))+
+  geom_density(alpha = 0.25) +
+  geom_vline(data = mean_revenue, aes(xintercept = mean_revenue, color = ad)) + # Bring in calculated mean
+  xlim(-10, 120) # Had to set bounds to visualize
+```
+
+### 3. Exploring relationships between promotion and ad types
+```{r}
+# Creating confidence interval tab
+R_C_n <- salesDat %>% 
+  group_by(ad, promo) %>% 
+  summarise(n = n())
+
+# Calulate confidence intervals using mulitnomialCI           
+R_C_n_ci <- multinomialCI(t(R_C_n[, 3]), 0.05) # Have to use t() to transpose the count table
+                                           # alpha = 0.05 indicates 95% confidence level
+
+# Next create a table with proportions that is ggplot friendly  
+R_C_tab <- salesDat %>% 
+  group_by(ad, promo) %>% 
+  summarise(p = n()/sum(nrow(salesDat)))
+
+# Add the confindence inervals to the table of proportions
+R_C_tab$ci_l <- R_C_n_ci[,1]
+R_C_tab$ci_u <- R_C_n_ci[,2]
+
+# Show the table
+(R_C_tab)
+```
+
+```{r}
+R_C_tab %>% 
+  ggplot(aes(x = ad, y = p, fill = promo)) +
+  geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label = round(p, 2)), vjust=-2.7, color = "black", # vjust moves lables above CI
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = ci_l, ymax = ci_u), 
+                width = 0.4, position = position_dodge(0.9))
+```
+
+Seems like longer vs shorter add campaigns (type a vs type b) aren't statistically different from each other, as opposed to not running ad campaigns. This will impact our ability to make inferences upon the population from the difference between the three.
+
+```{r}
+grid.arrange(
+salesDat %>% 
+  group_by(promo, ad) %>%
+  summarise(rev_mean = mean(revenue)) %>% 
+  ggplot(salesDat, mapping = aes(x = ad, y = rev_mean, fill = promo)) +
+    geom_bar(stat="identity", position = "dodge"),
+
+salesDat %>% 
+  group_by(promo, ad) %>%
+  summarise(mean_price_per_volume = mean(price_per_volume)) %>% 
+  ggplot(salesDat, mapping = aes(x = ad, y = mean_price_per_volume, fill = promo)) +
+    geom_bar(stat="identity", position = "dodge"),
+
+salesDat %>% 
+  group_by(promo, ad) %>%
+  summarise(units_mean = mean(units)) %>% 
+  ggplot(salesDat, mapping = aes(x = ad, y = units_mean, fill = promo)) +
+    geom_bar(stat="identity", position = "dodge"),
+
+ncol = 1
+)
+```
+
+Let's explore a multivariate regression of price_per_revenue by varaibles from salesDat
+```{r, results = "asis"}
+mod1 <- lm(units~week+price_per_volume+promo+ad, data = salesDat)
+stargazer(mod1, type = "html")
+```
+
+From these results, we can see that units and promotion are the only statistically significant variables, and the coefficient of determination is very small (0.046). Thus the relationship by ad campaign type on price is not very

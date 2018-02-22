@@ -1,0 +1,101 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    theme: yeti
+
+---
+
+#### **To: General Mills and Board of Directors**  
+  
+#### **From: Christopher Lacrampe**  
+  
+#### **Date: February 1, 2018**
+  
+#### **RE: Performance insights of both Ad Campaigns and In-Store Promotions**  
+
+***
+
+```{r echo = FALSE}
+# Course: BUAN 3210
+# Title: Memo for project manager
+# Purpose: Provide concise inference from EDA
+# Date: February 1, 2018
+# Author: Christopher Lacrampe
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# Load libraries
+library(tidyverse) # For wrangling, subseting and ploting
+library(lubridate) # For date manipulation
+library(gridExtra) # For grid.arrange function used to combine plots
+library(RColorBrewer) # For adding color pallette themes for graphics
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# Load appendix r data
+load("Technical-Appendix.RData")
+```
+
+
+#### **Intro:**
+
+As one of the largest cereal companies in the United States, General Mills has been able to hold higher revenues relative to other companies like Kelloggs and Post. However, looking towards such competitors' performances and comparing General Mill's internal information can yield fruitful insight into areas that General Mills could improve. Through the analysis presented below, we can safely test the assumptions that the in-store promotions and ad campaigns launched by General Mills have a significant impact on revenue, and we will end up rejecting those assumptions. It is my recommendation that General Mills' ad campaigns and in-store promotions should be re-assessed and re-structured, as they fail at accomplishing their primary goal--bringing in more revenue.
+
+#### **Finding 1: Performance of Small Ad Campaigns Lacks**
+
+The graphic below displays the differences between average revenue per sale by company and by ad campaign type. One important inclusion, the glyphs and numbers above each bar, allows us to compare how different each bar is from another. If there are overlaps in the confidence interval range from one bar to another, the data represented indicates that there likely isn't too much difference between the two bars' average revenue. For example, looking at Kelloggs' average revenue per sale by campaign yields the insight that each Ad type is different from each other (none of the bars are overlapping), and--more importantly--that both large/medium ad campaigns and small ad campaigns yield higher revenues than sales that occur during no ad campaigns. Looking at the results for General Mills yields a different story--that the revenue gained from sales occurring in the presence of small ad campaigns fails to differ from sales occurring during periods without any form of ad campaign. Thus, the impact of General Mills' ad campaigns on an attempt to increase revenue is not significant--ad campaigns fail to effect the revenue earned per sale. I recommend performing further analysis on how Kelloggs plans and implements its ad campaigns, relative to General Mills, in order to replicate their positive effect on their average revenue per sale at your firm.
+
+```{r echo = FALSE, include = TRUE}
+z <- qnorm(.90)
+
+totalDat %>% 
+  group_by(company, ad) %>%
+  summarise(m = mean(revenue), sd = sd(revenue), 
+            n = n(), ci = z * sd/sqrt(n)) %>%
+  ggplot(aes(x = company, y = m, fill = ad)) +
+  scale_fill_brewer(labels = c("Large/Medium", "Small", "None"), palette = "Spectral") +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(m, 2)), vjust=-1.5, color = "black", 
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = m - ci, ymax = m + ci), 
+                width = 0.5, position = position_dodge(0.9)) +
+  ggtitle("Small Campaigns are Effective for Kelloggs, but Not for General Mills") + 
+  theme_classic() +
+  theme(axis.ticks.x = element_blank()) +
+  xlab(NULL) +
+  ylab("Average Revenue per Sale") +
+  labs(subtitle = "Overlapping Intervals Indicate Insignificant Differences", fill = "Ad Campaign Type") 
+
+```
+
+#### **Finding 2: Performance of Promotions Lacks**
+
+The graphic below displays the differences between average revenue per sale by company and by the presence of in-store promotions. I have elected to again include the glyphs and numbers above each bar to allow for accurate comparisons from one bar's results to another. Again, looking at Kellogg's results yields the insight that, not only are the effects of implementing in-store promotions significant (the bars don't have overlapping bounds), but that implementing in-store promotions yields higher revenue per sale. Looking towards General Mill's sections, we again see that the bars overlap. So, while there may appear to be some minuscule benefits to running in-store promotions, the overlapping of the bars indicate that such differences are not very reliable to make such a claim. If the goal of offering in-store promotions is to increase revenue per sale, then I recommend that your firm looks closely at either the level that you discount during in-store promotions (if you reduce the discount and only a small decrease in units sold occurs, there will be net-positive effects on average revenue per sale), or compare your in-store promotions to promotions run by Kelloggs and alter your promotion policies accordingly (as Kellogg's promotions lead to higher revenue per sale).
+
+
+```{r, echo = FALSE, include = TRUE}
+z <- qnorm(0.90)
+
+totalDat %>% 
+  group_by(company, promo) %>%
+  summarise(m = mean(revenue), sd = sd(revenue), 
+            n = n(), ci = z * sd/sqrt(n)) %>% 
+  ggplot(aes(x = company, y = m, fill = promo)) +
+  scale_fill_brewer(labels = c("No", "Yes"), palette = "Set2") +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(m, 2)), vjust=-1, color = "black", 
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = m - ci, ymax = m + ci), 
+                width = 0.5, position = position_dodge(0.9)) +
+  ggtitle("In-Store Promotions are Effective for Kelloggs, but Not for General Mills") +
+  theme_classic() +
+  theme(axis.ticks.x = element_blank()) +
+  xlab(NULL) +
+  ylab("Average Revenue per Sale") +
+  labs(subtitle = "Overlapping Intervals Indicate Insignificant Differences", fill = "In-Store Promotion") 
+```
+
+#### **Conclusion:**
+
+In conclusion, while your firm has maintained higher average revenue per sale relative to your competitors there is still room for that margin to grow. More specifically, reflecting upon and improving company policies on in-store promotions and the development and implementation of ad campaigns in ways similar to the current activities of Kelloggs will lead to an increase in average revenue per sale.

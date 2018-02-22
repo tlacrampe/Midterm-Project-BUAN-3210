@@ -47,7 +47,7 @@ library(stargazer)
 
 Work with `mtp_sales_data` and `mtp_product_data` data sets
 
-```{r, warning = FALSE, message - FALSE}
+```{r, warning = FALSE, message = FALSE}
 # Load data 
 salesDat <- read.csv("mtp_sales_data.csv")
 productDat <- read.csv("mtp_product_data.csv")
@@ -55,14 +55,17 @@ productDat <- read.csv("mtp_product_data.csv")
 # Structure of data so know what working with
 str(salesDat)
 str(productDat)
+```
 
+#### Cleaning, merging, and adding variables to the data
+```{r, warning = FALSE, message = FALSE}
 # Re-structure upc key in productDat to enable joining
 productDat$UPC <- gsub("-", ".", productDat$UPC)
 
 # Seperating brand by company
 productDat$company <- fct_collapse(productDat$brand,
              General_Mills = c("GENERAL MILLS CHEERIOS", "GENERAL MILLS CINNAMON TST CR", "GENERAL MILLS COCOA PUFFS", "GENERAL MILLS KIX", "GENERAL MILLS LUCKY CHARMS"),
-             Kellogs = c("KELLOGGS COCOA KRISPIES", "KELLOGGS FROOT LOOPS", "KELLOGGS FROSTED FLAKES", "KELLOGGS FROSTED MINI WHEATS", "KELLOGGS RAISIN BRAN", "KELLOGGS RICE KRISPIES", "KELLOGGS SMART START", "KELLOGGS SPECIAL K"),
+             Kelloggs = c("KELLOGGS COCOA KRISPIES", "KELLOGGS FROOT LOOPS", "KELLOGGS FROSTED FLAKES", "KELLOGGS FROSTED MINI WHEATS", "KELLOGGS RAISIN BRAN", "KELLOGGS RICE KRISPIES", "KELLOGGS SMART START", "KELLOGGS SPECIAL K"),
              Post = c("POST GRAPE NUTS", "POST SHREDDED WHEAT")
                                )
 
@@ -72,6 +75,10 @@ salesDat$price_per_volume <- salesDat$price /productDat$volume
 
 # Mutating "promo" variable into factor levels of no and yes for inStorePromotions
 salesDat$promo <- factor(salesDat$promo)
+
+# Combining the two datasets into a new total dataset
+totalDat <- salesDat %>% 
+    left_join(productDat, by = "UPC") 
 ```
 
 Having restructured the UPC keys so they match in both the mtp_sales_data and mtp_product_data, we can now join both for a broader range of variable comparisons.
@@ -91,6 +98,8 @@ kable(
 )
 ```
 
+From this table, we can see that Kelloggs froot loops and frosted flakes comprise a greater proportion of the cereal data relative to the other brands' products. However, we can see that General Mills' cheerios has the highest average revenue which is coupled with a midling price_per_volume.
+
 ```{r}
 kable(
   salesDat %>% 
@@ -105,6 +114,7 @@ kable(
 )
 ```
 
+From this graphic, we can see that the majority of observations include products owned by Kelloggs, however the mean revenue per observation is the largest for General Mills.
 
 ```{r}
 kable(
@@ -120,6 +130,8 @@ kable(
 )
 ```
 
+This table informs us that Cinnamon Toast and Toasted flavored cereal have the highest average revenue when comparing other flavors. Note that while cinnamon toast and toasted have similairly high average revenues, toasted cereals have a much higher proportion at 32%, relative to the smaller proportion of cinnamon toast.
+
 ```{r}
 kable(
   salesDat %>% 
@@ -133,6 +145,8 @@ kable(
     mean_units = mean(units))
 )
 ```
+
+From this table, we can see that the presence of in-store promotions is linked to higher average revenue relative to observations where in-store promotions are not ongoing. However, without an in-store promotion ongoing, most of the average revenues are similair regardless of ad-campaing type/presence.
 
 ### 2. Exploring numerical relationships (e.g. units by price)
 ```{r}
@@ -178,7 +192,18 @@ ggplot(salesDat, aes(x = units, y = price_per_volume, color = promo)) +
 )
 ```
 
-By removing the effects of normalizing price by unit volume, we can see that the effects of the variable's relationships with units and revenue grows stronger
+By removing the effects of normalizing price by unit volume, we can see that the effects of the variable's relationships with units and revenue grows stronger.
+
+#### Let's ensure statistical differences by performing t-tests
+```{r}
+t.test(salesDat$price_per_volume[salesDat$price])
+t.test(salesDat$price_per_volume[salesDat$units])
+t.test(salesDat$price_per_volume[salesDat$revenue])
+t.test(salesDat$revenue[salesDat$units])
+```
+
+These results indicate that each of the variables are statistically different from each other (p-values are very small, well below a 5% threshold), so we can make comparisons between them without worrying for type2 errors where price and price_per_volume are not different from each other.
+
 
 ### 3. Exploring ad categories by various densities
 
@@ -192,7 +217,7 @@ week_mean <- salesDat %>%
 salesDat %>% 
   ggplot(aes(x = week, fill = ad, color = ad)) + 
   guides(color = FALSE) +
-  labs(title = "Ad density by week\n", x = "length of ad campaign(weeks)", fill = "Ad Campaign Type") +
+  labs(title = "Ad density by week\n", x = "Week of observation", fill = "Ad Campaign Type") +
   scale_fill_manual(labels = c("Big Ad", "Small/Medium Ad", "None"), values = c("red", "green", "blue"))+
   geom_density(alpha = 0.25) +
   geom_vline(data = week_mean, aes(xintercept = week_mean, color = ad)) + # Bring in calculated mean
@@ -266,7 +291,7 @@ R_C_tab %>%
                 width = 0.4, position = position_dodge(0.9))
 ```
 
-Seems like longer vs shorter add campaigns (type a vs type b) aren't statistically different from each other, as opposed to not running ad campaigns. This will impact our ability to make inferences upon the population from the difference between the three.
+Seems like smaller vs medium/larger add campaigns (type a vs type b) aren't statistically different from each other, as opposed to not running ad campaigns. This will impact our ability to make inferences upon the population from the difference between the three.
 
 ```{r}
 grid.arrange(
@@ -292,10 +317,140 @@ ncol = 1
 )
 ```
 
-Let's explore a multivariate regression of price_per_revenue by varaibles from salesDat
+Let's explore a multivariate regression of price_per_revenue by variables from totalDat
 ```{r, results = "asis"}
-mod1 <- lm(units~week+price_per_volume+promo+ad, data = salesDat)
-stargazer(mod1, type = "html")
+pricemod <- lm(price_per_volume~week+units+promo+ad, data = salesDat)
+unitsmod <- lm(units~week+price_per_volume+promo+ad, data = salesDat)
+revmod <- lm(revenue~week+revenue+promo+ad+company, data = totalDat)
+stargazer(pricemod, unitsmod, revmod, type = "html")
 ```
 
-From these results, we can see that units and promotion are the only statistically significant variables, and the coefficient of determination is very small (0.046). Thus the relationship by ad campaign type on price is not very
+From these results, we can see that units and promotion are the only statistically significant variables, and the coefficient of determination is very small (0.046). Thus the relationship by ad campaign type on price is not very accurate. Note that when including company, the effects relative to general mills are negative and significant, indicating that General Mills has inherint value that prompts greater revenue per sales on average, relative to the other companies.
+
+### 4. Exploring company levels by densities
+```{r}
+mean_week <- totalDat %>% 
+  group_by(company) %>% 
+  summarise(mean_week = mean(week))
+
+# Use geom_density to illustrate PDF
+totalDat %>% 
+  ggplot(aes(x = week, fill = company, color = company)) + 
+  guides(color = FALSE) +
+  labs(title = "Company Density by week\n", x = "Week sold", fill = "Company") +
+  scale_fill_manual(labels = c("General Mills", "Kelloggs", "Post"), values = c("red", "green", "blue"))+
+  geom_density(alpha = 0.25) +
+  geom_vline(data = mean_week, aes(xintercept = mean_week, color = company)) + # Bring in calculated mean
+  xlim(-10, 75) # Had to set bounds to visualize
+```
+```{r}
+revenue_mean <- totalDat %>% 
+  group_by(company) %>% 
+  summarise(revenue_mean = mean(revenue))
+
+# Use geom_density to illustrate PDF
+totalDat %>% 
+  ggplot(aes(x = revenue, fill = company, color = company)) + 
+  guides(color = FALSE) +
+  labs(title = "Company density by revenue\n", x = "Revenue per sale", fill = "Company") +
+  scale_fill_manual(labels = c("General Mills", "Kelloggs", "Post"), values = c("red", "green", "blue"))+
+  geom_density(alpha = 0.25) +
+  geom_vline(data = revenue_mean, aes(xintercept = revenue_mean, color = company)) + # Bring in calculated mean
+  xlim(-10, 75) # Had to set bounds to visualize
+```
+
+```{r}
+price_per_volume_mean <- totalDat %>% 
+  group_by(company) %>% 
+  summarise(price_per_volume_mean = mean(price_per_volume))
+
+# Use geom_density to illustrate PDF
+totalDat %>% 
+  ggplot(aes(x = price_per_volume, fill = company, color = company)) + 
+  guides(color = FALSE) +
+  labs(title = "Company density by price\n", x = "Price per Volume", fill = "Company") +
+  scale_fill_manual(labels = c("General Mills", "Kelloggs", "Post"), values = c("red", "green", "blue"))+
+  geom_density(alpha = 0.25) +
+  geom_vline(data = price_per_volume_mean, aes(xintercept = price_per_volume_mean, color = company)) + # Bring in calculated mean
+  xlim(-10, 75) # Had to set bounds to visualize
+```
+
+The results from the company density by revenue appear to be the most promising, where sales of General Mills yiels higher average revenue than other companies, let's dig into this difference a little deeper.
+
+### 5. Exploring company data by ad and promo (rev and units as well)
+
+```{r}
+# Exploring bar graphs for units per sale
+totalDat %>% 
+  group_by(company, ad) %>%
+  summarise(units_mean = mean(units)) %>% 
+  ggplot(salesDat, mapping = aes(x = company, y = units_mean, fill = ad)) +
+    geom_bar(stat="identity", position = "dodge")
+
+totalDat %>% 
+  group_by(company, promo) %>%
+  summarise(units_mean = mean(units)) %>% 
+  ggplot(salesDat, mapping = aes(x = company, y = units_mean, fill = promo)) +
+    geom_bar(stat="identity", position = "dodge")
+```
+
+```{r}
+# Exploring bar graphs for revenue per sale
+totalDat %>% 
+  group_by(company, ad) %>%
+  summarise(rev_mean = mean(revenue)) %>% 
+  ggplot(salesDat, mapping = aes(x = company, y = rev_mean, fill = ad)) +
+    geom_bar(stat="identity", position = "dodge")
+
+totalDat %>% 
+  group_by(company, promo) %>%
+  summarise(rev_mean = mean(revenue)) %>% 
+  ggplot(salesDat, mapping = aes(x = company, y = rev_mean, fill = promo)) +
+    geom_bar(stat="identity", position = "dodge")
+```
+
+From these graphs, we can see that general mills products have a higher average revenue mean relative to the other cereal companies regardless of promotions or ad campaign types. However, General Mills' small ad campaign types produce fairly similair mean revenue per sale relative to kellogs same campaign types. Let's check the difference by adding confidence intervals.
+
+#### Repeat bar graph including confidence intervals
+```{r}
+z <- qnorm(.90)
+
+totalDat %>% 
+  group_by(company, ad) %>%
+  summarise(m = mean(revenue), sd = sd(revenue), 
+            n = n(), ci = z * sd/sqrt(n)) %>%
+  ggplot(totalDat, mapping = aes(x = company, y = m, fill = ad)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(m, 2)), vjust=-1.5, color = "black", 
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = m - ci, ymax = m + ci), 
+                width = 0.5, position = position_dodge(0.9)) +
+  ggtitle("Mean profit by company (by ad campaign) ")
+
+``` 
+
+By looking at the confidence intervals, we can see that there is no significant difference between running a medium/large ad campaign vs running a small add campaign for General Mills, however, there is a difference between running a medium/large add campaign and running no ad campaign. Furthermore, their isn't a significant difference between running a small campaign for General Mills vs Kelloggs.
+
+```{r}
+z <- qnorm(0.90)
+
+totalDat %>% 
+  group_by(company, promo) %>%
+  summarise(m = mean(revenue), sd = sd(revenue), 
+            n = n(), ci = z * sd/sqrt(n)) %>% 
+  ggplot(aes(x = company, y = m, fill = promo)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(m, 2)), vjust=-1, color = "black", 
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = m - ci, ymax = m + ci), 
+                width = 0.5, position = position_dodge(0.9)) +
+  ggtitle("Mean profit by company (by promotion) ")
+```
+
+Looking back at revenue by promotion (or lack thereof), we can now see that there isn't a statisticaly significant (at 90% confidence) difference between running a promotion vs not running a promotion for general mills. Kelloggs doesn't have this same result, so the problem likely lies with the way promotions are organized. This will be our second key finding.
+
+```{r}
+save.image("Technical-Appendix.RData")
+```
+
+
